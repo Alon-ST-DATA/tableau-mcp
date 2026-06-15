@@ -1,5 +1,6 @@
 export const webToolNames = [
   'list-datasources',
+  'delete-datasource',
   'list-extract-refresh-tasks',
   'delete-extract-refresh-task',
   'list-users',
@@ -48,7 +49,12 @@ export const webToolGroupNames = [
 export type WebToolGroupName = (typeof webToolGroupNames)[number];
 
 export const webToolGroups = {
-  datasource: ['list-datasources', 'get-datasource-metadata', 'query-datasource'],
+  datasource: [
+    'list-datasources',
+    'get-datasource-metadata',
+    'query-datasource',
+    'delete-datasource',
+  ],
   workbook: ['list-workbooks', 'get-workbook', 'delete-workbook'],
   project: ['list-projects'],
   view: [

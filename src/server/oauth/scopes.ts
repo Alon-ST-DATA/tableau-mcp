@@ -25,6 +25,7 @@ export type McpScope =
   | 'tableau:mcp:tasks:read'
   | 'tableau:mcp:tasks:delete'
   | 'tableau:mcp:workbook:delete'
+  | 'tableau:mcp:datasource:delete'
   | 'tableau:mcp:users:read';
 
 export type TableauApiScope =
@@ -59,6 +60,7 @@ export const DEFAULT_SCOPES_SUPPORTED: ReadonlyArray<McpScope> = [
   'tableau:mcp:tasks:read',
   'tableau:mcp:tasks:delete',
   'tableau:mcp:workbook:delete',
+  'tableau:mcp:datasource:delete',
   'tableau:mcp:users:read',
 ];
 
@@ -103,6 +105,18 @@ const toolScopeMap: Record<
   // adminGate.assertAdmin → GET /sites/{siteId}/users/{userId} → users:read.
   'delete-workbook': {
     mcp: ['tableau:mcp:workbook:delete'],
+    api: new Set([
+      'tableau:content:delete',
+      'tableau:content:write',
+      'tableau:content:read',
+      'tableau:users:read',
+    ]),
+  },
+  // Admin-only destructive tool. Preview tags the datasource (content:write), resolves the owner
+  // (users:read), and warns about dependent workbooks/flows via the Metadata API (content:read);
+  // confirm deletes it (content:delete). adminGate.assertAdmin → GET /users/{id} → users:read.
+  'delete-datasource': {
+    mcp: ['tableau:mcp:datasource:delete'],
     api: new Set([
       'tableau:content:delete',
       'tableau:content:write',
@@ -260,6 +274,7 @@ function getEnabledToolNames(): Set<WebToolName> {
     enabledTools.delete('list-extract-refresh-tasks');
     enabledTools.delete('delete-extract-refresh-task');
     enabledTools.delete('delete-workbook');
+    enabledTools.delete('delete-datasource');
     enabledTools.delete('list-users');
     enabledTools.delete('query-admin-insights-ts-events');
     enabledTools.delete('query-admin-insights-site-content');
