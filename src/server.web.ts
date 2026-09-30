@@ -16,9 +16,10 @@ import { join } from 'path';
 import pkg from '../package.json';
 import { getConfig } from './config.js';
 import { ServiceUnavailableError } from './errors/mcpToolError.js';
-import { getFeatureGate } from './features/init.js';
+import { getAllFeatureStates, getFeatureGate } from './features/init.js';
 import { getTableauServerInfo } from './getTableauServerInfo.js';
 import { log } from './logging/logger.js';
+import { isDebugTraceEnabled, traceSessionContext } from './logging/traceLogger.js';
 import { registerPrompts } from './prompts/index.js';
 import { RestApiArgs } from './restApiInstance';
 import { roleRequiresEnforcement, siteRoleMeetsMinimum } from './sdks/tableau/types/user.js';
@@ -334,6 +335,26 @@ export class WebMcpServer extends Server {
       for (const condition of toolsOmittedFromUnmetConditions.keys()) {
         this.appendInstructions(getUnmetConditionInstructions(condition));
       }
+    }
+
+    // Extended trace (this fork): once LOG_LEVEL=debug, record the environment this session ran in —
+    // site/pod/auth, the caller's site role, and the full feature-flag state — so an operator can
+    // diagnose a session from the server's own logs. Gated on the trace being enabled so it costs
+    // nothing (and issues no extra REST call) in normal operation.
+    if (isDebugTraceEnabled()) {
+      // The role is only fetched above when enforce-role-requirements is on. When it's off (the
+      // default) do a single best-effort lookup purely for the trace; getCurrentUserSiteRole is
+      // fail-open (returns undefined) so a failure never blocks registration.
+      const siteRole = registrationContext.siteRole ?? (await getCurrentUserSiteRole(restApiArgs));
+      traceSessionContext({
+        server: config.server || tableauAuthInfo?.server,
+        siteName: tableauAuthInfo?.siteName ?? config.siteName,
+        authType: tableauAuthInfo?.type,
+        siteRole,
+        features: await getAllFeatureStates(),
+        toolsRegistered: toolsToRegister.length,
+        productVersion: tableauServerInfo.productVersion,
+      });
     }
 
     return toolsToRegister;

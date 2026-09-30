@@ -17,7 +17,13 @@ vi.mock('../config.js', () => ({
 
 import { getConfig } from '../config.js';
 import { getDirname } from '../utils/getDirname.js';
-import { getFeatureGate, initializeFeatureGate, resetFeatureGate } from './init.js';
+import {
+  getAllFeatureStates,
+  getFeatureGate,
+  initializeFeatureGate,
+  KNOWN_FEATURE_FLAGS,
+  resetFeatureGate,
+} from './init.js';
 import { featureGateProviderSchema, isFeatureGateProvider } from './types.js';
 
 describe('FeatureGate', () => {
@@ -237,6 +243,25 @@ describe('FeatureGate', () => {
         expect(isFeatureGateProvider(null)).toBe(false);
         expect(isFeatureGateProvider(123)).toBe(false);
       });
+    });
+  });
+
+  describe('getAllFeatureStates', () => {
+    it('resolves every known flag against the provider', async () => {
+      // features.json with a mix of on/off, plus an unknown key that must be ignored.
+      vi.mocked(readFileSync).mockReturnValue(
+        JSON.stringify({ 'mcp-apps': true, 'flow-tools': false, 'some-unlisted-flag': true }),
+      );
+
+      const states = await getAllFeatureStates();
+
+      // Exactly the known flags are reported (no more, no less).
+      expect(Object.keys(states).sort()).toEqual([...KNOWN_FEATURE_FLAGS].sort());
+      expect(states['mcp-apps']).toBe(true);
+      // A known flag absent from features.json defaults to false.
+      expect(states['knowledge-tools']).toBe(false);
+      // An unlisted flag never appears in the report.
+      expect(states).not.toHaveProperty('some-unlisted-flag');
     });
   });
 });

@@ -1,16 +1,31 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getBaseConfig } from '../config.shared.js';
 import { log } from './logger.js';
-import { traceRestRequest, traceRestResponse, traceToolOutcome } from './traceLogger.js';
+import {
+  isDebugTraceEnabled,
+  traceRestRequest,
+  traceRestResponse,
+  traceSessionContext,
+  traceToolOutcome,
+} from './traceLogger.js';
 
-vi.mock('./logger.js', () => ({
+// Keep the real `shouldLog` (pure severity math) so isDebugTraceEnabled works; only stub `log`.
+vi.mock('./logger.js', async (importActual) => ({
+  ...(await importActual<typeof import('./logger.js')>()),
   log: vi.fn(),
 }));
 
+vi.mock('../config.shared.js', () => ({
+  getBaseConfig: vi.fn(() => ({ logLevel: 'debug' })),
+}));
+
 const mockLog = vi.mocked(log);
+const mockGetBaseConfig = vi.mocked(getBaseConfig);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockGetBaseConfig.mockReturnValue({ logLevel: 'debug' } as ReturnType<typeof getBaseConfig>);
 });
 
 describe('traceRestRequest', () => {
@@ -131,5 +146,54 @@ describe('traceToolOutcome', () => {
   it('leaves an absent result preview undefined', () => {
     traceToolOutcome({ toolName: 't', requestId: 1, success: true, errorCode: '' });
     expect((mockLog.mock.calls[0][0].data as { result?: string }).result).toBeUndefined();
+  });
+});
+
+describe('traceSessionContext', () => {
+  const base = {
+    server: 'https://pod.online.tableau.com',
+    siteName: 'acme',
+    authType: 'Bearer',
+    siteRole: 'SiteAdministratorCreator',
+    features: { 'mcp-apps': false, 'flow-tools': true },
+    toolsRegistered: 12,
+    productVersion: '2025.3',
+  };
+
+  it('logs one debug line on the session-trace logger with site/pod/auth/role', () => {
+    traceSessionContext(base);
+    expect(mockLog).toHaveBeenCalledTimes(1);
+    const [entry] = mockLog.mock.calls[0];
+    expect(entry.level).toBe('debug');
+    expect(entry.logger).toBe('session-trace');
+    expect(entry.message).toContain('acme');
+    expect(entry.message).toContain('SiteAdministratorCreator');
+    expect(entry.message).toContain('tools=12');
+  });
+
+  it('carries the full feature-flag state in data', () => {
+    traceSessionContext(base);
+    expect(mockLog.mock.calls[0][0].data).toMatchObject({
+      features: { 'mcp-apps': false, 'flow-tools': true },
+      productVersion: '2025.3',
+      toolsRegistered: 12,
+    });
+  });
+
+  it('renders an unfetched role as "(not fetched)"', () => {
+    traceSessionContext({ ...base, siteRole: undefined });
+    expect(mockLog.mock.calls[0][0].message).toContain('role=(not fetched)');
+  });
+});
+
+describe('isDebugTraceEnabled', () => {
+  it('is true when LOG_LEVEL is debug', () => {
+    mockGetBaseConfig.mockReturnValue({ logLevel: 'debug' } as ReturnType<typeof getBaseConfig>);
+    expect(isDebugTraceEnabled()).toBe(true);
+  });
+
+  it('is false when LOG_LEVEL is info', () => {
+    mockGetBaseConfig.mockReturnValue({ logLevel: 'info' } as ReturnType<typeof getBaseConfig>);
+    expect(isDebugTraceEnabled()).toBe(false);
   });
 });

@@ -1,6 +1,7 @@
 import { RequestId } from '@modelcontextprotocol/sdk/types.js';
 
-import { log } from './logger.js';
+import { getBaseConfig } from '../config.shared.js';
+import { log, shouldLog } from './logger.js';
 
 /**
  * Extended debug tracing (this fork's addition).
@@ -21,10 +22,23 @@ import { log } from './logger.js';
  * Logger names:
  * - `rest-api-trace` — one line per external request and one per response, correlated by requestId.
  * - `tool`           — the tool OUTCOME line (paired with the existing upstream invocation line).
+ * - `session-trace`  — one line per session at registration: site/pod/auth, caller role, and the
+ *                      full feature-flag state, so an operator can see the environment a session ran
+ *                      in without an attached MCP client.
  */
 
 const REST_TRACE_LOGGER = 'rest-api-trace';
 const TOOL_LOGGER = 'tool';
+const SESSION_TRACE_LOGGER = 'session-trace';
+
+/**
+ * True when the extended debug trace would actually be emitted (i.e. `LOG_LEVEL=debug`). Callers use
+ * this to skip work whose ONLY purpose is the trace — e.g. an extra `/sessions/current` role lookup
+ * that must not run when the trace is off.
+ */
+export function isDebugTraceEnabled(): boolean {
+  return shouldLog('debug', getBaseConfig().logLevel);
+}
 
 /** Lazy site/user LUID accessors, matching the shape `log()` accepts as its context argument. */
 type LuidContext = {
@@ -134,6 +148,48 @@ export function traceToolOutcome(
     },
     ctx,
   );
+}
+
+/**
+ * Trace the session/registration context once, so a log reader can see the environment a session
+ * ran in: which site + pod it targeted, the auth type, the caller's site role, the full
+ * feature-flag state, and how many tools were registered. Emitted at debug at tool-registration
+ * time (see `server.web.ts`). Site/user LUIDs are request-scoped and therefore not known here — they
+ * appear on the per-request REST trace and the per-tool outcome line instead.
+ */
+export function traceSessionContext({
+  server,
+  siteName,
+  authType,
+  siteRole,
+  features,
+  toolsRegistered,
+  productVersion,
+}: {
+  server: string | undefined;
+  siteName: string | undefined;
+  authType: string | undefined;
+  siteRole: string | undefined;
+  features: Record<string, boolean>;
+  toolsRegistered: number;
+  productVersion: string | undefined;
+}): void {
+  log({
+    message:
+      `Session registered: server=${server ?? '?'}, site=${siteName || '?'}, ` +
+      `auth=${authType ?? '?'}, role=${siteRole ?? '(not fetched)'}, tools=${toolsRegistered}`,
+    level: 'debug',
+    logger: SESSION_TRACE_LOGGER,
+    data: {
+      server,
+      siteName: siteName || undefined,
+      authType,
+      siteRole,
+      productVersion,
+      toolsRegistered,
+      features,
+    },
+  });
 }
 
 function truncate(text: string | undefined): string | undefined {

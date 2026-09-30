@@ -182,3 +182,36 @@ function loadCustomProvider(config?: Record<string, unknown>): FeatureGateProvid
 export function resetFeatureGate(): void {
   globalFeatureGate = null;
 }
+
+/**
+ * The full set of feature-flag names the server consults. The {@link FeatureGateProvider} contract
+ * intentionally exposes only `isFeatureEnabled(name)` (no enumeration) so custom providers stay
+ * dependency-free, so this list is maintained here as the authoritative set of flags to report.
+ * Keep it in sync with the `isFeatureEnabled(...)` call sites and `features.json`.
+ */
+export const KNOWN_FEATURE_FLAGS = [
+  'mcp-apps',
+  'enforce-role-requirements',
+  'enforce-registration-conditions',
+  'authoring-tools',
+  'flow-tools',
+  'knowledge-tools',
+  'view-file-mode',
+  'view-data-file-mode',
+  'workbook-file-mode',
+  'data-apps',
+  'skills-over-mcp',
+] as const;
+
+/**
+ * Resolve the enabled/disabled state of every {@link KNOWN_FEATURE_FLAGS} entry against the active
+ * feature gate provider. Used by the extended debug trace to report the full flag state once at
+ * registration, so an operator reading the logs can see exactly which features gated this session.
+ */
+export async function getAllFeatureStates(): Promise<Record<string, boolean>> {
+  const gate = getFeatureGate();
+  const entries = await Promise.all(
+    KNOWN_FEATURE_FLAGS.map(async (name) => [name, await gate.isFeatureEnabled(name)] as const),
+  );
+  return Object.fromEntries(entries);
+}

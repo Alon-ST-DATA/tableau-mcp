@@ -120,13 +120,13 @@ const getNewRestApiInstanceAsync = async (
     requestInterceptor: disableLogging
       ? undefined
       : [
-          getRequestInterceptor(server, args.requestId),
+          getRequestInterceptor(server, args.requestId, { getSiteLuid, getUserLuid }),
           getRequestErrorInterceptor(server, args.requestId, { getSiteLuid, getUserLuid }),
         ],
     responseInterceptor: disableLogging
       ? undefined
       : [
-          getResponseInterceptor(server, args.requestId),
+          getResponseInterceptor(server, args.requestId, { getSiteLuid, getUserLuid }),
           getResponseErrorInterceptor(server, args.requestId, { getSiteLuid, getUserLuid }),
         ],
   });
@@ -219,10 +219,14 @@ export const useRestApi = async <T>(
 };
 
 export const getRequestInterceptor =
-  (server: Server, requestId: RequestId): RequestInterceptor =>
+  (
+    server: Server,
+    requestId: RequestId,
+    ctx?: { getSiteLuid?: () => string; getUserLuid?: () => string },
+  ): RequestInterceptor =>
   (request) => {
     request.headers['User-Agent'] = server.userAgent;
-    logRequest(server, request, requestId);
+    logRequest(server, request, requestId, ctx);
     return request;
   };
 
@@ -266,9 +270,13 @@ export const getRequestErrorInterceptor =
   };
 
 export const getResponseInterceptor =
-  (server: Server, requestId: RequestId): ResponseInterceptor =>
+  (
+    server: Server,
+    requestId: RequestId,
+    ctx?: { getSiteLuid?: () => string; getUserLuid?: () => string },
+  ): ResponseInterceptor =>
   (response) => {
-    logResponse(server, response, requestId);
+    logResponse(server, response, requestId, ctx);
     return response;
   };
 
@@ -309,7 +317,12 @@ export const getResponseErrorInterceptor =
     );
   };
 
-function logRequest(server: Server, request: RequestInterceptorConfig, requestId: RequestId): void {
+function logRequest(
+  server: Server,
+  request: RequestInterceptorConfig,
+  requestId: RequestId,
+  ctx?: { getSiteLuid?: () => string; getUserLuid?: () => string },
+): void {
   const config = getConfig();
   const maskedRequest = config.disableLogMasking ? request : maskRequest(request);
   const url = new URL(
@@ -334,20 +347,25 @@ function logRequest(server: Server, request: RequestInterceptorConfig, requestId
   notifier.info(server.mcpServer, messageObj, { notifier: 'rest-api', requestId });
 
   // Extended trace (this fork): also surface the request on the operator `log()` sinks at debug,
-  // since the notifier above never reaches appLogger. Reuse the already-masked fields.
-  traceRestRequest({
-    requestId,
-    method: maskedRequest.method,
-    url: url.toString(),
-    params: maskedRequest.params,
-    data: maskedRequest.data,
-  });
+  // since the notifier above never reaches appLogger. Reuse the already-masked fields, and forward
+  // the LUID ctx so each line is stamped with the site/user it belongs to.
+  traceRestRequest(
+    {
+      requestId,
+      method: maskedRequest.method,
+      url: url.toString(),
+      params: maskedRequest.params,
+      data: maskedRequest.data,
+    },
+    ctx,
+  );
 }
 
 function logResponse(
   server: Server,
   response: ResponseInterceptorConfig,
   requestId: RequestId,
+  ctx?: { getSiteLuid?: () => string; getUserLuid?: () => string },
 ): void {
   const config = getConfig();
   const maskedResponse = config.disableLogMasking ? response : maskResponse(response);
@@ -370,11 +388,15 @@ function logResponse(
 
   notifier.info(server.mcpServer, messageObj, { notifier: 'rest-api', requestId });
 
-  // Extended trace (this fork): mirror the response onto the operator `log()` sinks at debug.
-  traceRestResponse({
-    requestId,
-    url: url.toString(),
-    status: maskedResponse.status,
-    data: maskedResponse.data,
-  });
+  // Extended trace (this fork): mirror the response onto the operator `log()` sinks at debug,
+  // stamped with the LUID ctx so it correlates to the site/user it belongs to.
+  traceRestResponse(
+    {
+      requestId,
+      url: url.toString(),
+      status: maskedResponse.status,
+      data: maskedResponse.data,
+    },
+    ctx,
+  );
 }
