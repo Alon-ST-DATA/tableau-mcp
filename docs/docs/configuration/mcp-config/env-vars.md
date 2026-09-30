@@ -146,6 +146,12 @@ needing an attached MCP client to read notifications. At `debug`, the server add
   arguments, and what came back.
 - **`tool`** — the tool _outcome_ line (`Tool <name> completed: ... outcome=ok|error (<status>)`),
   paired with the existing invocation line, plus a bounded preview of the result text.
+- **`session-trace`** — one line per session at registration recording the environment it ran in:
+  server/pod, site name, auth type, the caller's site role, the full feature-flag state, and the
+  registered-tool count.
+
+The `rest-api-trace` lines are stamped with the `site_luid`/`user_luid` of the request they belong
+to.
 
 Credential masking still applies (unless [`DISABLE_LOG_MASKING`](#disable_log_masking) is set), and
 result previews are length-capped so a large response cannot flood the log. Leave `LOG_LEVEL` at the
