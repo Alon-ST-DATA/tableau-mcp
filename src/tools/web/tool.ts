@@ -3,6 +3,7 @@ import { CallToolResult, RequestId } from '@modelcontextprotocol/sdk/types.js';
 
 import { McpToolError, ZodiosValidationError } from '../../errors/mcpToolError.js';
 import { log } from '../../logging/logger.js';
+import { traceToolOutcome } from '../../logging/traceLogger.js';
 import { SiteRole } from '../../sdks/tableau/types/user.js';
 import { WebMcpServer } from '../../server.web.js';
 import { getRequiredApiScopesForTool, TableauApiScope } from '../../server/oauth/scopes.js';
@@ -273,6 +274,19 @@ export class WebTool<
         : getErrorResult(requestId, error);
       return toolResult;
     } finally {
+      // Extended trace (this fork): pair the upstream invocation line with an outcome line so a log
+      // reader sees the full tool lifecycle (success/error + a bounded result preview) at debug.
+      traceToolOutcome(
+        {
+          toolName: this.name,
+          requestId,
+          success,
+          errorCode,
+          resultText: extractToolResultText(toolResult),
+        },
+        extra,
+      );
+
       productTelemetryForwarder.send('tool_call', {
         tool_name: this.name,
         request_id: requestId.toString(),
@@ -326,6 +340,12 @@ function getAuthErrorMessage(
   return errorCode === '401'
     ? buildAuthenticationErrorMessage({ site, server })
     : buildPermissionErrorMessage({ site, server });
+}
+
+/** First text content block of a tool result, for the extended debug trace. Undefined if none. */
+function extractToolResultText(result: CallToolResult | undefined): string | undefined {
+  const firstText = result?.content?.find((c) => c.type === 'text');
+  return firstText?.type === 'text' ? firstText.text : undefined;
 }
 
 function getErrorResult(requestId: RequestId, error: unknown): CallToolResult {

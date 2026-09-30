@@ -134,6 +134,23 @@ Log entries with a level below the configured value are silently dropped. This i
 [`DEFAULT_NOTIFICATION_LEVEL`](#default_notification_level), which controls MCP client
 notifications.
 
+### Extended debug tracing
+
+Setting `LOG_LEVEL=debug` turns on an extended, operator-facing trace that is designed to make a
+misbehaving tool easy to diagnose from the server's own logs (stderr / file logger) — without
+needing an attached MCP client to read notifications. At `debug`, the server additionally emits:
+
+- **`rest-api-trace`** — one line per outbound Tableau REST request (`REST request → METHOD url`,
+  with masked params/body) and one per response (`REST response ← status url`, with masked body),
+  correlated by `request_id`. This surfaces exactly which external endpoint a tool hit, with what
+  arguments, and what came back.
+- **`tool`** — the tool _outcome_ line (`Tool <name> completed: ... outcome=ok|error (<status>)`),
+  paired with the existing invocation line, plus a bounded preview of the result text.
+
+Credential masking still applies (unless [`DISABLE_LOG_MASKING`](#disable_log_masking) is set), and
+result previews are length-capped so a large response cannot flood the log. Leave `LOG_LEVEL` at the
+default `info` to keep the trace off.
+
 <hr />
 
 ## `DISABLE_LOG_MASKING`

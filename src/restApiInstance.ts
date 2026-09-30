@@ -4,6 +4,7 @@ import { getConfig } from './config.js';
 import { log } from './logging/logger.js';
 import { notifier, shouldNotifyWhenLevelIsAtLeast } from './logging/notification.js';
 import { maskRequest, maskResponse } from './logging/secretMask.js';
+import { traceRestRequest, traceRestResponse } from './logging/traceLogger.js';
 import {
   AxiosResponseInterceptorConfig,
   ErrorInterceptor,
@@ -331,6 +332,16 @@ function logRequest(server: Server, request: RequestInterceptorConfig, requestId
   } as const;
 
   notifier.info(server.mcpServer, messageObj, { notifier: 'rest-api', requestId });
+
+  // Extended trace (this fork): also surface the request on the operator `log()` sinks at debug,
+  // since the notifier above never reaches appLogger. Reuse the already-masked fields.
+  traceRestRequest({
+    requestId,
+    method: maskedRequest.method,
+    url: url.toString(),
+    params: maskedRequest.params,
+    data: maskedRequest.data,
+  });
 }
 
 function logResponse(
@@ -358,4 +369,12 @@ function logResponse(
   } as const;
 
   notifier.info(server.mcpServer, messageObj, { notifier: 'rest-api', requestId });
+
+  // Extended trace (this fork): mirror the response onto the operator `log()` sinks at debug.
+  traceRestResponse({
+    requestId,
+    url: url.toString(),
+    status: maskedResponse.status,
+    data: maskedResponse.data,
+  });
 }
