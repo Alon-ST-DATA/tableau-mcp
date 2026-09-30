@@ -1,6 +1,7 @@
 import { RequestId } from '@modelcontextprotocol/sdk/types.js';
 
 import { getBaseConfig } from '../config.shared.js';
+import { ProductVersion } from '../sdks/tableau/types/serverInfo.js';
 import { log, shouldLog } from './logger.js';
 
 /**
@@ -172,7 +173,7 @@ export function traceSessionContext({
   siteRole: string | undefined;
   features: Record<string, boolean>;
   toolsRegistered: number;
-  productVersion: string | undefined;
+  productVersion: ProductVersion | undefined;
 }): void {
   log({
     message:

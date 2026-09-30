@@ -157,7 +157,7 @@ describe('traceSessionContext', () => {
     siteRole: 'SiteAdministratorCreator',
     features: { 'mcp-apps': false, 'flow-tools': true },
     toolsRegistered: 12,
-    productVersion: '2025.3',
+    productVersion: { value: '2025.3', build: '20253.24.0101.1234' },
   };
 
   it('logs one debug line on the session-trace logger with site/pod/auth/role', () => {
@@ -175,7 +175,7 @@ describe('traceSessionContext', () => {
     traceSessionContext(base);
     expect(mockLog.mock.calls[0][0].data).toMatchObject({
       features: { 'mcp-apps': false, 'flow-tools': true },
-      productVersion: '2025.3',
+      productVersion: { value: '2025.3', build: '20253.24.0101.1234' },
       toolsRegistered: 12,
     });
   });
